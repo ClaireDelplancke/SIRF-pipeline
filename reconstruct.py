@@ -1,12 +1,9 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
-Created on Thu Sep 24 11:55:25 2020
+Author: Claire Delplancke, University of Bath
+Member of the PET++ project: https://petpp.github.io
+"""
 
-@author: cd902
-"""
 from calendar import day_abbr
-from imp import acquire_lock
 import os
 import runpy
 import time
