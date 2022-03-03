@@ -323,10 +323,10 @@ def main():
     metadata_dict['randoms'] = args.randoms
     metadata_dict['scatter'] = args.scatter
     # save
-    np.save(args.folder_output + '/metadata', metadata_dict)
+    np.save('{}/{}_metadata'.format(args.folder_output,output_name), metadata_dict)
     
     logging.info('save objective values')
-    np.save(args.folder_output + '/objective', spdhg.objective)
+    np.save('{}/{}_objective'.format(args.folder_output, output_name), spdhg.objective)
 
 def load_data(data_dir, name):
     # Load Matlab data
