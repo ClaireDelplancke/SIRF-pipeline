@@ -18,6 +18,7 @@ from functools import partial
 
 
 import sirf.STIR as pet
+pet.set_verbosity(1)
 import sirf.Reg as reg
 from cil.framework import BlockDataContainer, ImageGeometry, BlockGeometry
 from cil.optimisation.algorithms import PDHG, SPDHG
