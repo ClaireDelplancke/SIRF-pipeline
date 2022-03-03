@@ -282,11 +282,16 @@ def main():
                 log_file=logfile,
                 )
 
-    output_name = 'spdhg_reg_{}_alpha{}_nsub{}_precond{}_gamma{}_a{}_n{}_d{}_r{}_s{}.npy'.format(
-            args.reg, args.reg_strength, 
-            num_subsets, args.precond, args.pd_par, int(args.acf), 
-            int(args.normf), int(args.dtpucf), int(args.randoms), int(args.scatter)
-            )
+    # output_name = 'spdhg_reg_{}_alpha{}_nsub{}_precond{}_gamma{}_a{}_n{}_d{}_r{}_s{}'.format(
+    #         args.reg, args.reg_strength, 
+    #         num_subsets, args.precond, args.pd_par, int(args.acf), 
+    #         int(args.normf), int(args.dtpucf), int(args.randoms), int(args.scatter)
+    #         )
+    output_name = 'spdhg_reg_{}_nsub{}_precond{}_a{}_n{}_d{}_r{}_s{}'.format(
+        args.reg, 
+        num_subsets, args.precond, int(args.acf), 
+        int(args.normf), int(args.dtpucf), int(args.randoms), int(args.scatter)
+        )
 
 
     psave_callback = partial(
