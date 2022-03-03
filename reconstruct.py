@@ -45,8 +45,6 @@ def main():
     parser.add_argument("--folder_input", type=str)
     parser.add_argument("--duetto_prefix", default='f1b1', type=str)
     parser.add_argument("--folder_output", type=str)
-    parser.add_argument("--folder_param", type=str, 
-                        help="Folder to save/load pre-computed parameters")
 
     # helper to set mutually exclusive flags
     def add_bool_arg(parser, name, default=True, helpp=None):
@@ -94,16 +92,16 @@ def main():
                         default=50, type=int)
     parser.add_argument("--nobj", help="Frequency to compute objective functions", 
                         default=50, type=int) 
-    parser.add_argument("--nifti", type=int, default=0)
+    parser.add_argument("--nifti", type=int, default=0, help="Save reconstruction in nifti format")
     args = parser.parse_args()
 
     ###########################################################################
     # Create param and output folders
     ###########################################################################
 
-    for folder in [args.folder_output, args.folder_param, './logs']:
+    for folder in [args.folder_output, './logs']:
         if not os.path.exists(folder):
-            logging.info('Create param or output folder')
+            logging.info('Create output or log folder')
             os.makedirs(folder)
 
     ###########################################################################
@@ -226,15 +224,6 @@ def main():
     F = BlockFunction(*data_fits)
     K = BlockOperator(*acq_models)
 
-    ###########################################################################
-    # Compute norms if needed
-    ###########################################################################
-
-    if args.precond == 1:
-        logging.info('Preconditioning is on, no need to compute op norms')
-        normKs =  None
-    else:
-        normKs = get_proj_norms(K, num_subsets, args.folder_param)
 
     ###########################################################################
     # Set-up step-sizes and probabilities
@@ -248,12 +237,17 @@ def main():
         # XXX mysterious axpby set-up
         use_axpby = True
         # compute the norm of each component
-        normKs = get_proj_norms(K, num_subsets, args.folder_param)
+        postfix = "a{}_n{}_d{}".format(
+            int(args.acf), 
+            int(args.normf), 
+            int(args.dtpucf))
+        normKs = get_proj_norms(K, num_subsets, postfix, args.folder_output)
         # let spdhg do its default implementation
         sigmas = None
         tau = None
         gamma = args.pd_par
     else:
+        logging.info('Preconditioning is on, no need to compute op norms')
         # XXX mysterious axpby set-up
         use_axpby = False
         tau = 1/args.pd_par * get_tau(K, prob)
@@ -388,9 +382,9 @@ def precond_proximal(self, x, tau, out=None):
     out *= tau
     return out 
 
-def get_proj_norms(K, n, folder):
+def get_proj_norms(K, n, postfix, folder):
     # load or compute and save norm of each sub-operator
-    file_path = '{}/normKs_nsub{}.npy'.format(folder, n)
+    file_path = '{}/normKs_nsub{}_{}.npy'.format(folder, n, postfix)
     if os.path.isfile(file_path):
         print('Norm file {} exists, load it'.format(file_path))
         norms = np.load(file_path, allow_pickle=True).tolist()
