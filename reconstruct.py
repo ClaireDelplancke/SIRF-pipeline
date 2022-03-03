@@ -131,11 +131,11 @@ def main():
     data_shape = data_dict['prompts'].shape
     multfact_data = np.ones(data_shape)
     if args.acf == True:
-        multfact_data *= 1/data_dict['acf']
+        multfact_data *= data_dict['acf']
     if args.normf == True:
-        multfact_data *= data_dict['norm']
+        multfact_data *= 1/data_dict['norm']
     if args.dtpucf == True:
-        multfact_data *= data_dict['dtPuc']
+        multfact_data *= 1/data_dict['dtPuc']
     addfact_data = np.zeros(data_shape)
     if args.randoms == True:
         addfact_data += data_dict['randoms']
@@ -184,8 +184,6 @@ def main():
     im_one = image_template.clone()
     im_one.fill(1.)
     masks = []
-    # XXX create acquisition sensitivity model from bin efficiencies
-    # XXX not sure at all I'm doing the right thing here
     asm = pet.AcquisitionSensitivityModel(multfact)
 
     # Loop over physical subsets
