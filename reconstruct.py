@@ -7,8 +7,6 @@ from calendar import day_abbr
 import os
 import runpy
 import time
-#  Run prerequisite files
-os.chdir('/u/s/cd902/GitHub/SIRF-pipeline')
 import logging
 from datetime import datetime
 import argparse
@@ -100,20 +98,22 @@ def main():
     args = parser.parse_args()
 
     ###########################################################################
-    # Create param and output folders
+    # Create output folders
     ###########################################################################
 
-    for folder in [args.folder_output, './logs']:
+    folder_log = '{}/logs'.format(os.getcwd())
+    for folder in [args.folder_output, folder_log]:
         if not os.path.exists(folder):
             logging.info('Create output or log folder')
             os.makedirs(folder)
+    os.chdir(args.folder_output)
 
     ###########################################################################
     # Create logger
     ###########################################################################
 
     # logging options
-    logfile = 'logs/log_{}.log'.format(datetime.now().strftime("%Y_%m_%d_%H:%M"))
+    logfile = '{}/log_{}.log'.format(folder_log, datetime.now().strftime("%Y_%m_%d_%H:%M"))
     logging.basicConfig(level=logging.INFO, format='%(message)s')
     logger = logging.getLogger()
     logger.addHandler(logging.FileHandler(logfile, 'a'))
