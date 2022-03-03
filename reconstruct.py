@@ -329,10 +329,10 @@ def main():
     np.save(args.folder_output + '/objective', obj_values)
 
 def load_data(data_dir, name):
-    # Load Matlab data outputted by Duetto
-    # and convert it to 3D Numpy
+    # Load Matlab data
+    # and convert to 3D Numpy
     # 'data_dir': directory path
-    # 'name': for example 'f1b1'
+    # 'name': for example 'f1b1' (bed position)
     
     dict = {}
 
@@ -345,11 +345,9 @@ def load_data(data_dir, name):
     for key in ['norm']:
         # load from Matlab format to Numpy
         array = scipy.io.loadmat('{}/{}.mat'.format(data_dir, key))['data']
-        # Numpy to ODL
         dict[key] = np.transpose(array, (1, 2, 0))
         
     for key in ['decay', 'duration']:
-        # load from Matlab format to Numpy
         dict[key] = scipy.io.loadmat('{}/{}_{}.mat'.format(data_dir, key, name))['data']
       
     for key in ['ir3d','pifa']:
