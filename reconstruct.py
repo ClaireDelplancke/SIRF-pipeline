@@ -326,7 +326,7 @@ def main():
     np.save(args.folder_output + '/metadata', metadata_dict)
     
     logging.info('save objective values')
-    np.save(args.folder_output + '/objective', obj_values)
+    np.save(args.folder_output + '/objective', spdhg.objective)
 
 def load_data(data_dir, name):
     # Load Matlab data
