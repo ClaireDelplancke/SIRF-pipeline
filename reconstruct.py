@@ -13,7 +13,7 @@ import logging
 from datetime import datetime
 import argparse
 import numpy as np
-import scipy
+import scipy.io
 from functools import partial
 
 
