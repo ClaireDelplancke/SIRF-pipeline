@@ -288,10 +288,9 @@ def main():
             int(args.normf), int(args.dtpucf), int(args.randoms), int(args.scatter)
             )
 
-    obj_values = []
 
     psave_callback = partial(
-        save_callback, num_save, args.nifti, args.folder_output, output_name, num_iter, obj_values)
+        save_callback, num_save, args.nifti, args.folder_output, output_name, num_iter)
 
 
     ###########################################################################
@@ -441,7 +440,7 @@ def get_sigmas(K):
 
 
 def save_callback(save_interval, nifti, outpath, outp_file,
-                      num_iter, obj_values, iteration, obj_value, x):
+                      num_iter, iteration, obj_value, x):
     """Save callback function.
         File should be saved at "{}/{}_iters_{}".format(outpath,outp_file, completed_iterations)
     """
@@ -454,13 +453,6 @@ def save_callback(save_interval, nifti, outpath, outp_file,
         else:
             reg.NiftiImageData(x).write(
                 "{}/{}_iters_{}".format(outpath,outp_file, completed_iterations))
-        # save current obj
-        obj_values.append(obj_value)
-        
-
-    
-
-
     
         
 if __name__ == "__main__":
