@@ -157,9 +157,9 @@ def main():
     sinogram = acq_data_template.clone()
     multfact = acq_data_template.clone()
     addfact = acq_data_template.clone()  
-    sinogram.fill(data_dict['prompts'].flat)
-    multfact.fill(multfact_data.flat)
-    addfact.fill(addfact_data.flat)
+    sinogram.fill(data_dict['prompts'])
+    multfact.fill(multfact_data)
+    addfact.fill(addfact_data)
 
     # Initial image
     image_template = acq_data_template.create_uniform_image(0.0)
@@ -348,10 +348,9 @@ def load_data(data_dir, name):
     return dict
 
 
-# XXX
-# XXX solve me
 def acq_data_from_scanner_name(scanner_name):
-    return NotImplemented
+    pet.AcquisitionData.set_storage_scheme('memory')
+    return pet.AcquisitionData(scanner_name)
 
 
 def precond_proximal(self, x, tau, out=None):
