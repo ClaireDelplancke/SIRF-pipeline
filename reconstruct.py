@@ -90,10 +90,8 @@ def main():
                         default=0, type=int) 
     
     # output parameters
-    parser.add_argument("--nsave", help="Frequency to which save iterative recos", 
+    parser.add_argument("--nsave", help="Frequency to which save iterative recos and compute objective", 
                         default=50, type=int)
-    parser.add_argument("--nobj", help="Frequency to compute objective functions", 
-                        default=50, type=int) 
     parser.add_argument("--nifti", type=int, default=0, help="Save reconstruction in nifti format")
     args = parser.parse_args()
 
@@ -259,6 +257,7 @@ def main():
         sigmas = args.pd_par * get_sigmas(K)
         gamma = None
         normKs = None
+
     
     ###########################################################################
     # Set-up SPDHG
@@ -268,7 +267,6 @@ def main():
     # number of iterations
     num_iter = args.nepoch * num_subsets
     num_save = args.nsave * num_subsets
-    num_obj = args.nobj * num_subsets
 
     spdhg = SPDHG(            
                 f=F, 
@@ -281,7 +279,7 @@ def main():
                 use_axpby=use_axpby,
                 norms=normKs,
                 max_iteration=num_iter,         
-                update_objective_interval=num_obj,
+                update_objective_interval=num_save,
                 log_file=logfile,
                 )
 
@@ -291,8 +289,11 @@ def main():
             int(args.normf), int(args.dtpucf), int(args.randoms), int(args.scatter)
             )
 
+    obj_values = []
+
     psave_callback = partial(
-        save_callback, num_save, args.nifti, args.folder_output, output_name, num_iter)
+        save_callback, num_save, args.nifti, args.folder_output, output_name, num_iter, obj_values)
+
 
     ###########################################################################
     # Run SPDHG
@@ -302,7 +303,7 @@ def main():
     spdhg.run(num_iter, verbose=2, print_interval=1, callback=psave_callback)
 
     ###########################################################################
-    # Save metadata
+    # Save metadata and obj values
     ###########################################################################
 
     logging.info('save metadata')
@@ -320,6 +321,9 @@ def main():
     metadata_dict['scatter'] = args.scatter
     # save
     np.save(args.folder_output + '/metadata', metadata_dict)
+    
+    logging.info('save objective values')
+    np.save(args.folder_output + '/objective', obj_values)
 
 def load_data(data_dir, name):
     # Load Matlab data outputted by Duetto
@@ -439,18 +443,24 @@ def get_sigmas(K):
 
 
 def save_callback(save_interval, nifti, outpath, outp_file,
-                      num_iter, iteration, x):
+                      num_iter, obj_values, iteration, obj_value, x):
     """Save callback function.
         File should be saved at "{}/{}_iters_{}".format(outpath,outp_file, completed_iterations)
     """
     completed_iterations = iteration
     if completed_iterations % save_interval == 0 or \
             completed_iterations == num_iter:
+        # save current reco
         if nifti==0:
             x.write("{}/{}_iters_{}".format(outpath,outp_file, completed_iterations))
         else:
             reg.NiftiImageData(x).write(
                 "{}/{}_iters_{}".format(outpath,outp_file, completed_iterations))
+        # save current obj
+        obj_values.append(obj_value)
+        
+
+    
 
 
     
