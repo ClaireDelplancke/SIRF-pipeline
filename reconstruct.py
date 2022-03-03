@@ -358,9 +358,9 @@ def load_data(data_dir, name):
     return dict
 
 
-def acq_data_from_scanner_name(scanner_name):
+def acq_data_from_scanner_name(scanner_name,span=2):
     pet.AcquisitionData.set_storage_scheme('memory')
-    return pet.AcquisitionData(scanner_name)
+    return pet.AcquisitionData(scanner_name,span=span)
 
 
 def precond_proximal(self, x, tau, out=None):
