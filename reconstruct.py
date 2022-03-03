@@ -72,7 +72,7 @@ def main():
     # model parameters
     parser.add_argument("--reg", help="Regularisation", 
                         default='FGP-TV',  type=str, 
-                        choices = ['FGP-TV','None', 'Explicit-TV'])
+                        choices = ['FGP-TV' ,'FGP_TV' ,'None', 'Explicit-TV'])
     parser.add_argument("--reg_strength", help="Parameter of regularisation", 
                         default=0.1, type=float)
     parser.add_argument("--lor", 
@@ -205,16 +205,15 @@ def main():
 
     logging.info('Set-up F, G and K')
     data_fits = [KullbackLeibler(b=sinogram, eta=addfact, mask=mask.as_array(), use_numba=True) for mask in masks]
-    if args.reg == "FGP_TV":
+    if args.reg == "FGP_TV" or args.reg == "FGP-TV":
         r_alpha = args.reg_strength
         r_iters = 100
         r_tolerance = 1e-7
         r_iso = 0
         r_nonneg = 1
-        r_printing = 0
         device = 'gpu'
         G = FGP_TV(r_alpha, r_iters, r_tolerance,
-                r_iso, r_nonneg, r_printing, device)
+                r_iso, r_nonneg, device)
         if args.precond==1:
             FGP_TV.proximal = precond_proximal
     elif args.reg == "None":
@@ -369,12 +368,11 @@ def precond_proximal(self, x, tau, out=None):
     pars = {'algorithm': FGP_TV,
             'input': np.asarray(x.as_array()/tau.as_array(),
                                 dtype=np.float32),
-            'regularization_parameter': self.lambdaReg,
-            'number_of_iterations': self.iterationsTV,
+            'regularization_parameter': self.alpha,
+            'number_of_iterations': self.max_iteration,
             'tolerance_constant': self.tolerance,
             'methodTV': self.methodTV,
-            'nonneg': self.nonnegativity,
-            'printingOut': self.printing}
+            'nonneg': self.nonnegativity}
 
     res = regularisers.FGP_TV(pars['input'],
                                     pars['regularization_parameter'],
