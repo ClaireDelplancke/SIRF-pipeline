@@ -76,6 +76,9 @@ def main():
                         choices = ['FGP-TV','None', 'Explicit-TV'])
     parser.add_argument("--reg_strength", help="Parameter of regularisation", 
                         default=0.1, type=float)
+    parser.add_argument("--lor", 
+                        help="number of tangential LOR, decrease for faster computational time",
+                        default=10)
     
     # reconstruction parameters
     parser.add_argument("--nepoch", help="Number of epochs", 
@@ -177,7 +180,7 @@ def main():
     # number of subsets
     num_subsets = args.nsubsets 
     # set-up acquisition model
-    acq_models = [pet.AcquisitionModelUsingParallelproj() for k in range(num_subsets)]
+    acq_models = [pet.AcquisitionModelUsingRayTracingMatrix() for k in range(num_subsets)]
     # create masks
     im_one = image_template.clone()
     im_one.fill(1.)
@@ -187,6 +190,7 @@ def main():
     # Loop over physical subsets
     for k in range(num_subsets):
         # Set up
+        acq_models[k].set_num_tangential_LORs(args.lor)
         acq_models[k].set_acquisition_sensitivity(asm)
         acq_models[k].set_up(sinogram, image_template)    
         acq_models[k].num_subsets = num_subsets
