@@ -258,6 +258,7 @@ def main():
         tau = 1/args.pd_par * get_tau(K, prob)
         sigmas = args.pd_par * get_sigmas(K)
         gamma = None
+        normKs = None
     
     ###########################################################################
     # Set-up SPDHG
