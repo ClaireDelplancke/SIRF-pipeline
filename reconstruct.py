@@ -209,7 +209,7 @@ def main():
         r_alpha = args.reg_strength
         r_iters = 100
         r_tolerance = 1e-7
-        r_iso = 0
+        r_iso = 1
         r_nonneg = 1
         device = 'gpu'
         G = FGP_TV(r_alpha, r_iters, r_tolerance,
