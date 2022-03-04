@@ -216,6 +216,8 @@ def main():
                 r_iso, r_nonneg, device)
         if args.precond==1:
             FGP_TV.proximal = precond_proximal
+        # redefines check_input which gives error
+        FGP_TV.check_input = FGP_TV_check_input
     elif args.reg == "None":
         G = IndicatorBox(lower=0)
     elif args.reg == "Explicit-TV":
@@ -390,6 +392,10 @@ def precond_proximal(self, x, tau, out=None):
         out.fill(res)
     out *= tau
     return out 
+
+def FGP_TV_check_input(self, input):
+    if len(input.shape) > 3:
+        raise ValueError('{} cannot work on more than 3D. Got {}'.format(self.__class__.__name__, input.geometry.length))
 
 def get_proj_norms(K, n, postfix, folder):
     # load or compute and save norm of each sub-operator
