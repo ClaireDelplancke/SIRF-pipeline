@@ -66,8 +66,6 @@ def main():
     # size of reconstructed image
     parser.add_argument("--nxny", help="Number of voxels", 
                         type=int)
-    parser.add_argument("--dxdy", help="Size of voxels", 
-                        type=float)
 
     # model parameters
     parser.add_argument("--reg", help="Regularisation", 
@@ -76,9 +74,17 @@ def main():
     parser.add_argument("--reg_strength", help="Parameter of regularisation", 
                         default=0.1, type=float)
     parser.add_argument("--lor", 
-                        help="number of tangential LOR, decrease for faster computational time",
+                        help="Number of tangential LOR. Increases computational time",
                         default=10)
-    
+    parser.add_argument("--numSegsToCombine", 
+                        help = "Rebin all sinograms, with a given number of segments to combine. Decreases computational time.",
+                        type=int, default = 1)
+    parser.add_argument("--numViewsToCombine",
+                        help = "Rebin all sinograms, with a given number of view to combine. Decreases computational time.",
+                        type=int, default = 1)
+    parser.add_argument('--fast', action='store_true',
+                        help="Decreases computational time by rebinning data and halving reconstructed image dimensons")
+
     # reconstruction parameters
     parser.add_argument("--nepoch", help="Number of epochs", 
                         default=2, type=int)
@@ -142,33 +148,55 @@ def main():
     if args.scatter == True:
         addfact_data += data_dict['scatter']
 
+
+    ###########################################################################
+    # Set-up projection parameters
+    ###########################################################################
     
+    logging.info('Set-up projection parameters')
+
+    # Set-up acq data template using scanner name
+    if args.type == 'PET-CT':
+        scanner_name = 'GE Discovery 690'
+    elif args.type == 'PET-MR':
+        scanner_name = 'GE Signa PET/MR'
+    raw_acq_data_template = acq_data_from_scanner_name(scanner_name)
+    
+    if args.fast:
+        logging.warning("The '--fast' option is on, supercedes '--lor', '--nxny', '--numSegsToCombine' and '--numViewsToCombine' ")
+        lor = 2
+        nxny = int(np.ceil(raw_acq_data_template.create_uniform_image(0.0).shape[1]/2))
+        num_segs_to_combine = 5
+        num_views_to_combine = 4
+    else:
+        lor = args.lor
+        nxny = args.nxny
+        num_segs_to_combine = args.numSegsToCombine
+        num_views_to_combine = args.numViewsToCombine
+
     ###########################################################################
     # Create SIRF objects
     ###########################################################################
 
     logging.info('Create SIRF objects')
-    # Set-up aqc data template using scanner name
-    if args.type == 'PET-CT':
-        scanner_name = 'GE Discovery 690'
-    elif args.type == 'PET-MR':
-        scanner_name = 'GE Signa PET/MR'
-    acq_data_template = acq_data_from_scanner_name(scanner_name)
     
     # Create and fill SIRF acq data objects
-    sinogram = acq_data_template.clone()
-    multfact = acq_data_template.clone()
-    addfact = acq_data_template.clone()  
-    sinogram.fill(data_dict['prompts'])
-    multfact.fill(multfact_data)
-    addfact.fill(addfact_data)
+    sinogram_raw = raw_acq_data_template.clone()
+    multfact_raw = raw_acq_data_template.clone()
+    addfact_raw = raw_acq_data_template.clone() 
+    sinogram_raw.fill(data_dict['prompts'])
+    multfact_raw.fill(multfact_data)
+    addfact_raw.fill(addfact_data)
+
+    # Rebin
+    sinogram, multfact, addfact = pre_process_sinogram(
+        [sinogram_raw, multfact_raw, addfact_raw], 
+        num_segs_to_combine,
+        num_views_to_combine)
 
     # Initial image
-    image_template = acq_data_template.create_uniform_image(0.0)
-    if args.dxdy is not None:
-        logging.warning('Option -dxdy not implemented')
-    if args.nxny is not None:
-        logging.warning('Option -dxdy not implemented')
+    image_template = raw_acq_data_template.create_uniform_image(0.0, xy=nxny)
+
 
     ###########################################################################
     # Set-up acquisition model
@@ -189,7 +217,7 @@ def main():
     # Loop over physical subsets
     for k in range(num_subsets):
         # Set up
-        acq_models[k].set_num_tangential_LORs(args.lor)
+        acq_models[k].set_num_tangential_LORs(lor)
         acq_models[k].set_acquisition_sensitivity(asm)
         acq_models[k].set_up(sinogram, image_template)    
         acq_models[k].num_subsets = num_subsets
@@ -330,6 +358,10 @@ def main():
     logging.info('save objective values')
     np.save('{}/{}_objective'.format(args.folder_output, output_name), spdhg.objective)
 
+    ###########################################################################
+    # End of main()
+    ###########################################################################
+
 def load_data(data_dir, name):
     # Load Matlab data
     # and convert to 3D Numpy
@@ -359,6 +391,21 @@ def load_data(data_dir, name):
             dict[key] = np.flip(np.transpose(array, (2,1,0)),axis=1)
         
     return dict
+
+def pre_process_sinogram(raw_sinos,  num_segs_to_combine, num_views_to_combine):
+
+    if num_segs_to_combine * num_views_to_combine > 1:
+        sinos = []
+        for raw_sino in raw_sinos:
+            sino = raw_sino.rebin(num_segs_to_combine, 
+                                num_views_to_combine, 
+                                do_normalisation=False)
+            print("Rebinned acquisition data dimensions: {}".format(sino.dimensions()))
+            sinos.append(sino)
+    else:
+        sinos = raw_sinos
+
+    return sinos
 
 
 def acq_data_from_scanner_name(scanner_name,span=2):
