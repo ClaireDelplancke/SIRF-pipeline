@@ -96,7 +96,9 @@ def main():
                         default=0, type=int) 
     
     # output parameters
-    parser.add_argument("--nsave", help="Frequency to which save iterative recos and compute objective", 
+    parser.add_argument("--nsave", help="Frequency to which save iterative recos", 
+                        default=100, type=int)
+    parser.add_argument("--nobj", help="Frequency to which compute objective", 
                         default=50, type=int)
     parser.add_argument("--nifti", type=int, default=0, help="Save reconstruction in nifti format")
     args = parser.parse_args()
@@ -296,6 +298,7 @@ def main():
     # number of iterations
     num_iter = args.nepoch * num_subsets
     num_save = args.nsave * num_subsets
+    num_obj = args.nobj * num_subsets
 
     spdhg = SPDHG(            
                 f=F, 
@@ -308,7 +311,7 @@ def main():
                 use_axpby=use_axpby,
                 norms=normKs,
                 max_iteration=num_iter,         
-                update_objective_interval=num_save,
+                update_objective_interval=num_obj,
                 log_file=logfile,
                 )
 
