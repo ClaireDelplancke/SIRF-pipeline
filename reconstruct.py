@@ -1,7 +1,10 @@
 """
-Author: Claire Delplancke, University of Bath
-Member of the PET++ project: https://petpp.github.io
+Author: Claire Delplancke, University of Bath, PET++ project
+2022
+https://clairedelplancke.github.io
+https://petpp.github.io
 """
+
 
 from calendar import day_abbr
 import os
