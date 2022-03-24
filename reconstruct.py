@@ -21,7 +21,7 @@ import sirf.Reg as reg
 from cil.framework import BlockDataContainer, ImageGeometry, BlockGeometry
 from cil.optimisation.algorithms import PDHG, SPDHG
 from cil.optimisation.functions import \
-    KullbackLeibler, BlockFunction, IndicatorBox, MixedL21Norm, ScaledFunction
+    KullbackLeibler, BlockFunction, IndicatorBox, MixedL21Norm, ScaledFunction, TotalVariation
 from cil.optimisation.operators import \
     CompositionOperator, BlockOperator, LinearOperator, GradientOperator, ScaledOperator
 from cil.plugins.ccpi_regularisation.functions import FGP_TV
@@ -38,9 +38,10 @@ def main():
     parser = argparse.ArgumentParser(description="GE PET reconstruction")
     
     # input / output
-    parser.add_argument("--type", type=str, 
-                        default='PET-CT',
-                        choices=['PET-CT','PET-MR'])
+    parser.add_argument("--scanner", type=str, 
+                        default='GE Discovery 690')
+    parser.add_argument("--span", type=int, 
+                        default=2, help='GE scanners need 2')
     parser.add_argument("--folder_input", type=str)
     parser.add_argument("--duetto_prefix", default='f1b1', type=str)
     parser.add_argument("--folder_output", type=str)
@@ -70,7 +71,7 @@ def main():
     # model parameters
     parser.add_argument("--reg", help="Regularisation", 
                         default='FGP-TV',  type=str, 
-                        choices = ['FGP-TV' ,'FGP_TV' ,'None', 'Explicit-TV'])
+                        choices = ['FGP-TV' ,'FGP_TV' ,'None', 'Explicit-TV', 'CIL-TV'])
     parser.add_argument("--reg_strength", help="Parameter of regularisation", 
                         default=0.1, type=float)
     parser.add_argument("--lor", 
@@ -158,11 +159,10 @@ def main():
     logging.info('Set-up projection parameters')
 
     # Set-up acq data template using scanner name
-    if args.type == 'PET-CT':
-        scanner_name = 'GE Discovery 690'
-    elif args.type == 'PET-MR':
-        scanner_name = 'GE Signa PET/MR'
-    raw_acq_data_template = acq_data_from_scanner_name(scanner_name)
+    scanner_name = args.scanner
+    span = args.span
+    pet.AcquisitionData.set_storage_scheme('memory')
+    raw_acq_data_template = pet.AcquisitionData(scanner_name,span=span)
     
     if args.fast:
         logging.warning("The '--fast' option is on, supercedes '--lor', '--nxny', '--numSegsToCombine' and '--numViewsToCombine' ")
@@ -235,19 +235,24 @@ def main():
 
     logging.info('Set-up F, G and K')
     data_fits = [KullbackLeibler(b=sinogram, eta=addfact, mask=mask.as_array(), use_numba=True) for mask in masks]
+    r_alpha = args.reg_strength
+    r_iters = 100
+    r_tolerance = 1e-7
     if args.reg == "FGP_TV" or args.reg == "FGP-TV":
-        r_alpha = args.reg_strength
-        r_iters = 100
-        r_tolerance = 1e-7
+        logging.warning("With the FGP_TV option, the gradient is defined as the finite difference operator (voxel-size not taken into account)")
         r_iso = 1
         r_nonneg = 1
         device = 'gpu'
         G = FGP_TV(r_alpha, r_iters, r_tolerance,
                 r_iso, r_nonneg, device)
         if args.precond==1:
+            raise ValueError("Precond option not compatible with FGP-TV regularizer")
             FGP_TV.proximal = precond_proximal
         # redefines check_input which gives error
         FGP_TV.check_input = FGP_TV_check_input
+    elif args.reg == "CIL-TV":
+        logging.warning("With the CIL-TV option, the gradient is defined as the finite difference operator divided by the voxel-size in each direction")
+        G = r_alpha * TotalVariation(r_iters, r_tolerance, lower=0)
     elif args.reg == "None":
         G = IndicatorBox(lower=0)
     elif args.reg == "Explicit-TV":
@@ -409,39 +414,6 @@ def pre_process_sinogram(raw_sinos,  num_segs_to_combine, num_views_to_combine):
         sinos = raw_sinos
 
     return sinos
-
-
-def acq_data_from_scanner_name(scanner_name,span=2):
-    pet.AcquisitionData.set_storage_scheme('memory')
-    return pet.AcquisitionData(scanner_name,span=span)
-
-
-def precond_proximal(self, x, tau, out=None):
-
-    """Modify proximal method to work with preconditioned tau"""
-    pars = {'algorithm': FGP_TV,
-            'input': np.asarray(x.as_array()/tau.as_array(),
-                                dtype=np.float32),
-            'regularization_parameter': self.alpha,
-            'number_of_iterations': self.max_iteration,
-            'tolerance_constant': self.tolerance,
-            'methodTV': self.methodTV,
-            'nonneg': self.nonnegativity}
-
-    res = regularisers.FGP_TV(pars['input'],
-                                    pars['regularization_parameter'],
-                                    pars['number_of_iterations'],
-                                    pars['tolerance_constant'],
-                                    pars['methodTV'],
-                                    pars['nonneg'],
-                                    self.device)[0]
-    if out is not None:
-        out.fill(res)
-    else:
-        out = x.copy()
-        out.fill(res)
-    out *= tau
-    return out 
 
 def FGP_TV_check_input(self, input):
     if len(input.shape) > 3:
