@@ -63,6 +63,12 @@ def load_data(data_dir, name):
         
     return dict
 
+def augment_dim(data):
+    "input: array (x,y,z), outputs array (1,x,y,z) with same content"
+    augmented_data = np.zeros((1,*data.shape))
+    augmented_data[0,:,:,:] = data
+    return augmented_data
+
 def pre_process_sinogram(raw_sinos,  num_segs_to_combine, num_views_to_combine):
 
     if num_segs_to_combine * num_views_to_combine > 1:
@@ -285,9 +291,9 @@ class Reconstruct(object):
         sinogram_raw = self.raw_acq_data_template.clone()
         multfact_raw = self.raw_acq_data_template.clone()
         addfact_raw = self.raw_acq_data_template.clone() 
-        sinogram_raw.fill(self.data_dict['prompts'])
-        multfact_raw.fill(self.multfact_data)
-        addfact_raw.fill(self.addfact_data)
+        sinogram_raw.fill(augment_dim(self.data_dict['prompts']))
+        multfact_raw.fill(augment_dim(self.multfact_data))
+        addfact_raw.fill(augment_dim(self.addfact_data))
 
         # Rebin
         self.sinogram, self.multfact, self.addfact = pre_process_sinogram(
