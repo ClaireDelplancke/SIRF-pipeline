@@ -242,7 +242,7 @@ def CIL_TV_proximal(self, x, tau, out = None):
         self.gradient.adjoint(self.tmp_q, out = self.tmp_x)
         
         # axpby now works for matrices
-        self.tmp_x.axpby(-self.regularisation_parameter*tau, 1.0, x, out=self.tmp_x)
+        self.tmp_x.sapyb(-self.regularisation_parameter*tau, x, 1.0, out=self.tmp_x)
         self.projection_C(self.tmp_x, out = self.tmp_x)                       
 
         self.gradient.direct(self.tmp_x, out=self.p1)
@@ -533,8 +533,6 @@ class Reconstruct(object):
         self.prob = [1/self.num_subsets] * self.num_subsets
         # primal-dual balancing parameter
         if not self.args.precond:
-            # XXX mysterious axpby set-up
-            self.use_axpby = True
             # compute the norm of each component
             self.postfix = "a{}_n{}_d{}".format(
                 int(self.args.acf), 
@@ -546,8 +544,6 @@ class Reconstruct(object):
             self.tau = None
             self.gamma = self.args.pd_par
         else:
-            # XXX mysterious axpby set-up
-            self.use_axpby = False
             self.tau = 1/self.args.pd_par * get_tau(self.K, self.prob)
             self.sigmas = self.args.pd_par * get_sigmas(self.K)
             self.gamma = None
@@ -569,7 +565,6 @@ class Reconstruct(object):
                     sigma=self.sigmas,
                     gamma=self.gamma,
                     prob=self.prob,
-                    use_axpby=self.use_axpby,
                     norms=self.normKs,
                     max_iteration=self.num_iter,         
                     update_objective_interval=num_obj,
