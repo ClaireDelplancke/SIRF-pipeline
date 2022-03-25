@@ -15,6 +15,8 @@ import argparse
 import numpy as np
 import scipy.io
 from functools import partial
+from numbers import Number
+import warnings
 
 
 import sirf.STIR as pet
@@ -154,6 +156,158 @@ def save_callback(save_interval, nifti, outpath, outp_file,
             reg.NiftiImageData(x).write(
                 "{}/{}_iters_{}".format(outpath,outp_file, completed_iterations))
 
+# Redefines CIL_TV to allow warm-start
+
+def CIL_TV__init__(self,
+                max_iteration=100, 
+                tolerance = None, 
+                correlation = "Space",
+                backend = "c",
+                lower = -np.inf, 
+                upper = np.inf,
+                isotropic = True,
+                split = False,
+                info = False,
+                warmstart = False):
+    
+
+    super(TotalVariation, self).__init__(L = None)
+    # Regularising parameter = alpha
+    self.regularisation_parameter = 1.
+    
+    # Iterations for FGP_TV
+    self.iterations = max_iteration
+    
+    # Tolerance for FGP_TV
+    self.tolerance = tolerance
+    
+    # Total variation correlation (isotropic=Default)
+    self.isotropic = isotropic
+    
+    # correlation space or spacechannels
+    self.correlation = correlation
+    self.backend = backend        
+    
+    # Define orthogonal projection onto the convex set C
+    self.lower = lower
+    self.upper = upper
+    self.tmp_proj_C = IndicatorBox(lower, upper).proximal
+                    
+    # Setup GradientOperator as None. This is to avoid domain argument in the __init__     
+
+    self._gradient = None
+    self._domain = None
+
+    self.pptmp = None
+    self.pptmp1 = None
+    
+    # Print stopping information (iterations and tolerance error) of FGP_TV  
+    self.info = info
+
+    # splitting Gradient
+    self.split = split
+
+    # warm-start
+    self.warmstart  = warmstart
+    if self.warmstart:
+        self.hasstarted = False
+
+def CIL_TV_proximal(self, x, tau, out = None):
+    
+    ''' Returns the solution of the FGP_TV algorithm '''         
+    try:
+        self._domain = x.geometry
+    except:
+        self._domain = x
+    
+    # initialise
+    t = 1
+    if not self.warmstart:   
+        self.tmp_p = self.gradient.range_geometry().allocate(0)  
+        self.tmp_q = self.tmp_p.copy()
+        self.tmp_x = self.gradient.domain_geometry().allocate(0)     
+        self.p1 = self.gradient.range_geometry().allocate(0)
+    else:
+        if not self.hasstarted:
+            self.tmp_p = self.gradient.range_geometry().allocate(0)  
+            self.tmp_q = self.tmp_p.copy()
+            self.tmp_x = self.gradient.domain_geometry().allocate(0)     
+            self.p1 = self.gradient.range_geometry().allocate(0)
+            self.hasstarted = True
+
+    should_break = False
+    for k in range(self.iterations):
+                                                                                
+        t0 = t
+        self.gradient.adjoint(self.tmp_q, out = self.tmp_x)
+        
+        # axpby now works for matrices
+        self.tmp_x.axpby(-self.regularisation_parameter*tau, 1.0, x, out=self.tmp_x)
+        self.projection_C(self.tmp_x, out = self.tmp_x)                       
+
+        self.gradient.direct(self.tmp_x, out=self.p1)
+        if isinstance (tau, (Number, np.float32, np.float64)):
+            self.p1 *= self.L/(self.regularisation_parameter * tau)
+        else:
+            self.p1 *= self.L/self.regularisation_parameter
+            self.p1 /= tau
+
+        if self.tolerance is not None:
+            
+            if k%5==0:
+                error = self.p1.norm()
+                self.p1 += self.tmp_q
+                error /= self.p1.norm()
+                if error<=self.tolerance:                           
+                    should_break = True
+            else:
+                self.p1 += self.tmp_q
+        else:
+            self.p1 += self.tmp_q
+        if k == 0:
+            # preallocate for projection_P
+            self.pptmp = self.p1.get_item(0) * 0
+            self.pptmp1 = self.pptmp.copy()
+
+        self.projection_P(self.p1, out=self.p1)
+        
+
+        t = (1 + np.sqrt(1 + 4 * t0 ** 2)) / 2
+        
+        #self.tmp_q.fill(self.p1 + (t0 - 1) / t * (self.p1 - self.tmp_p))
+        self.p1.subtract(self.tmp_p, out=self.tmp_q)
+        self.tmp_q *= (t0-1)/t
+        self.tmp_q += self.p1
+        
+        self.tmp_p.fill(self.p1)
+
+        if should_break:
+            break
+    
+    #clear preallocated projection_P arrays
+    self.pptmp = None
+    self.pptmp1 = None
+    
+    # Print stopping information (iterations and tolerance error) of FGP_TV     
+    if self.info:
+        if self.tolerance is not None:
+            print("Stop at {} iterations with tolerance {} .".format(k, error))
+        else:
+            print("Stop at {} iterations.".format(k))                
+        
+    if out is None:                        
+        self.gradient.adjoint(self.tmp_q, out=self.tmp_x)
+        self.tmp_x *= tau
+        self.tmp_x *= self.regularisation_parameter 
+        x.subtract(self.tmp_x, out=self.tmp_x)
+        return self.projection_C(self.tmp_x)
+    else:          
+        self.gradient.adjoint(self.tmp_q, out = out)
+        out*=tau
+        out*=self.regularisation_parameter
+        x.subtract(out, out=out)
+        self.projection_C(out, out=out)
+
 #############################################################################
 #               Reconstruction class                                        #
 #############################################################################
@@ -199,6 +353,8 @@ class Reconstruct(object):
         parser.add_argument("--reg", help="Regularisation", 
                             default='FGP-TV',  type=str, 
                             choices = ['FGP-TV' ,'FGP_TV' ,'None', 'Explicit-TV', 'CIL-TV'])
+        parser.add_argument("--no_warm_start", action='store_true', 
+                            help="disables warm-start in CIL-TV")
         parser.add_argument("--reg_strength", help="Parameter of regularisation", 
                             default=0.1, type=float)
         parser.add_argument("--lor", 
@@ -335,10 +491,10 @@ class Reconstruct(object):
 
         data_fits = [KullbackLeibler(b=self.sinogram, eta=self.addfact, mask=mask.as_array(), use_numba=True) for mask in self.masks]
         r_alpha = self.args.reg_strength
-        r_iters = 100
         r_tolerance = 1e-7
         if self.args.reg == "FGP_TV" or self.args.reg == "FGP-TV":
             print("With the FGP_TV option, the gradient is defined as the finite difference operator (voxel-size not taken into account)")
+            r_iters = 100
             r_iso = 1
             r_nonneg = 1
             device = 'gpu'
@@ -351,7 +507,15 @@ class Reconstruct(object):
             FGP_TV.check_input = FGP_TV_check_input
         elif self.args.reg == "CIL-TV":
             print("With the CIL-TV option, the gradient is defined as the finite difference operator divided by the voxel-size in each direction")
-            self.G = r_alpha * TotalVariation(r_iters, r_tolerance, lower=0)
+            if self.args.no_warm_start:
+                r_iters = 100
+                self.G = r_alpha * TotalVariation(r_iters, r_tolerance, lower=0)
+            else:
+                TotalVariation.__init__ = CIL_TV__init__
+                TotalVariation.proximal = CIL_TV_proximal
+                r_iters = 5
+                self.G = r_alpha * TotalVariation(r_iters, r_tolerance, lower=0, warmstart=True)
+
         elif self.args.reg == "None":
             self.G = IndicatorBox(lower=0)
         elif self.args.reg == "Explicit-TV":
@@ -417,12 +581,18 @@ class Reconstruct(object):
         #         num_subsets, args.precond, args.pd_par, int(args.acf), 
         #         int(args.normf), int(args.dtpucf), int(args.randoms), int(args.scatter)
         #         )
-        self.output_name = 'spdhg_reg_{}_nsub{}_precond{}_a{}_n{}_d{}_r{}_s{}'.format(
-            self.args.reg, 
-            self.num_subsets, int(self.args.precond), int(self.args.acf), 
-            int(self.args.normf), int(self.args.dtpucf), int(self.args.randoms), int(self.args.scatter)
-            )
-
+        if self.args.reg == 'CIL-TV':
+            self.output_name = 'spdhg_reg_{}_warmstart{}_nsub{}_precond{}_a{}_n{}_d{}_r{}_s{}'.format(
+                self.args.reg, int(not self.args.no_warm_start),
+                self.num_subsets, int(self.args.precond), int(self.args.acf), 
+                int(self.args.normf), int(self.args.dtpucf), int(self.args.randoms), int(self.args.scatter)
+                )
+        else:
+            self.output_name = 'spdhg_reg_{}_nsub{}_precond{}_a{}_n{}_d{}_r{}_s{}'.format(
+                self.args.reg, 
+                self.num_subsets, int(self.args.precond), int(self.args.acf), 
+                int(self.args.normf), int(self.args.dtpucf), int(self.args.randoms), int(self.args.scatter)
+                )
 
         self.psave_callback = partial(
             save_callback, num_save, int(self.args.nifti), self.args.folder_output, self.output_name, self.num_iter)
