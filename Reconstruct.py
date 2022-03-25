@@ -220,15 +220,15 @@ class Reconstruct(object):
                             default=24, type=int)
         parser.add_argument("--pd_par", help="Primal-dual balancing parameter gamma", 
                             default=1.0, type=float) 
-        parser.add_argument("--precond", help="Preconditioning flag", 
-                            default=0, type=int) 
+        parser.add_argument("--precond", action='store_true',
+                            help="Preconditioning flag") 
         
         # output parameters
         parser.add_argument("--nsave", help="Frequency to which save iterative recos", 
                             default=100, type=int)
         parser.add_argument("--nobj", help="Frequency to which compute objective", 
                             default=50, type=int)
-        parser.add_argument("--nifti", type=int, default=0, help="Save reconstruction in nifti format")
+        parser.add_argument("--nifti", action='store_true', help="Save reconstruction in nifti format")
         self.args = parser.parse_args()
 
     def create_output_folders(self):
@@ -344,7 +344,7 @@ class Reconstruct(object):
             device = 'gpu'
             self.G = FGP_TV(r_alpha, r_iters, r_tolerance,
                     r_iso, r_nonneg, device)
-            if self.args.precond==1:
+            if self.args.precond:
                 raise ValueError("Precond option not compatible with FGP-TV regularizer")
                 FGP_TV.proximal = precond_proximal
             # XXX redefines check_input which gives error
@@ -368,7 +368,7 @@ class Reconstruct(object):
         # uniform probabilities
         self.prob = [1/self.num_subsets] * self.num_subsets
         # primal-dual balancing parameter
-        if self.args.precond == 0:
+        if not self.args.precond:
             # XXX mysterious axpby set-up
             self.use_axpby = True
             # compute the norm of each component
@@ -419,13 +419,13 @@ class Reconstruct(object):
         #         )
         self.output_name = 'spdhg_reg_{}_nsub{}_precond{}_a{}_n{}_d{}_r{}_s{}'.format(
             self.args.reg, 
-            self.num_subsets, self.args.precond, int(self.args.acf), 
+            self.num_subsets, int(self.args.precond), int(self.args.acf), 
             int(self.args.normf), int(self.args.dtpucf), int(self.args.randoms), int(self.args.scatter)
             )
 
 
         self.psave_callback = partial(
-            save_callback, num_save, self.args.nifti, self.args.folder_output, self.output_name, self.num_iter)
+            save_callback, num_save, int(self.args.nifti), self.args.folder_output, self.output_name, self.num_iter)
 
     def run_SPDHG(self):
         '''Run SPDHG'''
