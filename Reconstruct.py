@@ -87,6 +87,7 @@ def pre_process_sinogram(raw_sinos,  num_segs_to_combine, num_views_to_combine):
     return sinos
 
 def FGP_TV_check_input(self, input):
+    # work-around CIL's issue #1189
     if len(input.shape) > 3:
         raise ValueError('{} cannot work on more than 3D. Got {}'.format(self.__class__.__name__, input.geometry.length))
 
@@ -503,7 +504,8 @@ class Reconstruct(object):
             if self.args.precond:
                 raise ValueError("Precond option not compatible with FGP-TV regularizer")
                 FGP_TV.proximal = precond_proximal
-            # XXX redefines check_input which gives error
+            # work-around CIL's issue #1189
+            # XXX change when issue solved
             FGP_TV.check_input = FGP_TV_check_input
         elif self.args.reg == "CIL-TV":
             print("With the CIL-TV option, the gradient is defined as the finite difference operator divided by the voxel-size in each direction")
