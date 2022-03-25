@@ -559,6 +559,10 @@ class Reconstruct(object):
         num_save = self.args.nsave * self.num_subsets
         num_obj = self.args.nobj * self.num_subsets
 
+        # axpby is deprecated, sapby should be used in SPDHG instead
+        # not released yet, meanwhile set use_axpby to False
+        use_axpby = False
+
         self.spdhg = SPDHG(            
                     f=self.F, 
                     g=self.G, 
@@ -571,6 +575,7 @@ class Reconstruct(object):
                     max_iteration=self.num_iter,         
                     update_objective_interval=num_obj,
                     log_file=log_file,
+                    use_axpby=use_axpby
                     )
 
         # output_name = 'spdhg_reg_{}_alpha{}_nsub{}_precond{}_gamma{}_a{}_n{}_d{}_r{}_s{}'.format(
