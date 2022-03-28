@@ -385,7 +385,7 @@ class Reconstruct(object):
                             default=100, type=int)
         parser.add_argument("--nobj", help="Frequency to which compute objective", 
                             default=50, type=int)
-        parser.add_argument("--nifti", action='store_true', help="Save reconstruction in nifti format")
+        parser.add_argument("--nifti", action='store_true', help="Save final reconstruction in nifti format")
         self.args = parser.parse_args()
 
     def create_output_folders(self):
@@ -597,15 +597,15 @@ class Reconstruct(object):
                 )
 
         self.psave_callback = partial(
-            save_callback, num_save, int(self.args.nifti), self.args.folder_output, self.output_name, self.num_iter)
+            save_callback, num_save, 0, self.args.folder_output, self.output_name, self.num_iter)
 
     def run_SPDHG(self):
         '''Run SPDHG'''
 
         self.spdhg.run(self.num_iter, verbose=2, print_interval=1, callback=self.psave_callback)
 
-    def save_metadata_and_objective(self):
-        """Save metadata and obj values"""
+    def save_final(self):
+        """Save metadata, objective, final reconstruction"""
 
         metadata_dict = {}
         # parameters of the mathematical reconstruction
@@ -620,8 +620,12 @@ class Reconstruct(object):
         metadata_dict['randoms'] = self.args.randoms
         metadata_dict['scatter'] = self.args.scatter
         # save
-        np.save('{}/{}_metadata'.format(self.args.folder_output,self.output_name), metadata_dict)
-        np.save('{}/{}_objective'.format(self.args.folder_output, self.output_name), self.spdhg.objective)
+        np.save('{}/{}_reg{}_metadata'.format(self.args.folder_output, self.output_name, self.args.reg_strength), metadata_dict)
+        np.save('{}/{}_reg{}_objective'.format(self.args.folder_output, self.output_name, self.args.reg_strength), self.spdhg.objective)
+        if self.args.nifti:
+            reg.NiftiImageData(self.spdhg.solution).write(
+                "{}/{}_reg{}_iters_{}".format(self.args.folder_output,self.output_name, self.args.reg_strength, self.spdhg.iteration))
+ 
 
 
 
@@ -684,7 +688,7 @@ if __name__ == "__main__":
 
     # Save metadata and obj values
     logging.info('save objective values')
-    reconstruct.save_metadata_and_objective()
+    reconstruct.save_final()
 
 
 
