@@ -152,7 +152,7 @@ def save_callback(save_interval, nifti, outpath, outp_file,
             completed_iterations == num_iter:
         # save current reco
         if nifti==0:
-            x.write("{}/{}_iters_{}".format(outpath,outp_file, completed_iterations))
+            x.write("{}/{}_iters_{}.hv".format(outpath,outp_file, completed_iterations))
         else:
             reg.NiftiImageData(x).write(
                 "{}/{}_iters_{}".format(outpath,outp_file, completed_iterations))
@@ -578,20 +578,15 @@ class Reconstruct(object):
                     use_axpby=use_axpby
                     )
 
-        # output_name = 'spdhg_reg_{}_alpha{}_nsub{}_precond{}_gamma{}_a{}_n{}_d{}_r{}_s{}'.format(
-        #         args.reg, args.reg_strength, 
-        #         num_subsets, args.precond, args.pd_par, int(args.acf), 
-        #         int(args.normf), int(args.dtpucf), int(args.randoms), int(args.scatter)
-        #         )
         if self.args.reg == 'CIL-TV':
-            self.output_name = 'spdhg_reg_{}_warmstart{}_nsub{}_precond{}_a{}_n{}_d{}_r{}_s{}'.format(
-                self.args.reg, int(not self.args.no_warm_start),
+            self.output_name = 'spdhg_reg_{}_alpha{}_warmstart{}_nsub{}_precond{}_a{}_n{}_d{}_r{}_s{}'.format(
+                self.args.reg, self.args.reg_strength, int(not self.args.no_warm_start),
                 self.num_subsets, int(self.args.precond), int(self.args.acf), 
                 int(self.args.normf), int(self.args.dtpucf), int(self.args.randoms), int(self.args.scatter)
                 )
         else:
-            self.output_name = 'spdhg_reg_{}_nsub{}_precond{}_a{}_n{}_d{}_r{}_s{}'.format(
-                self.args.reg, 
+            self.output_name = 'spdhg_reg_{}_alpha{}_nsub{}_precond{}_a{}_n{}_d{}_r{}_s{}'.format(
+                self.args.reg, self.args.reg_strength,
                 self.num_subsets, int(self.args.precond), int(self.args.acf), 
                 int(self.args.normf), int(self.args.dtpucf), int(self.args.randoms), int(self.args.scatter)
                 )
@@ -620,11 +615,11 @@ class Reconstruct(object):
         metadata_dict['randoms'] = self.args.randoms
         metadata_dict['scatter'] = self.args.scatter
         # save
-        np.save('{}/{}_reg{}_metadata'.format(self.args.folder_output, self.output_name, self.args.reg_strength), metadata_dict)
-        np.save('{}/{}_reg{}_objective'.format(self.args.folder_output, self.output_name, self.args.reg_strength), self.spdhg.objective)
+        np.save('{}/{}_metadata'.format(self.args.folder_output, self.output_name), metadata_dict)
+        np.save('{}/{}_objective'.format(self.args.folder_output, self.output_name), self.spdhg.objective)
         if self.args.nifti:
             reg.NiftiImageData(self.spdhg.solution).write(
-                "{}/{}_reg{}_iters_{}".format(self.args.folder_output,self.output_name, self.args.reg_strength, self.spdhg.iteration))
+                "{}/{}_iters_{}".format(self.args.folder_output,self.output_name, self.spdhg.iteration))
  
 
 
