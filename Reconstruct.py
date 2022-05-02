@@ -18,7 +18,7 @@ import scipy.io
 from functools import partial
 from numbers import Number
 import warnings
-
+import skrt
 
 import sirf.STIR as pet
 pet.set_verbosity(1)
@@ -36,7 +36,7 @@ from ccpi.filters import regularisers
 src_path = '{}/src'.format(os.getcwd())
 sys.path.append(src_path)
 from utils import load_data, augment_dim, pre_process_sinogram, FGP_TV_check_input, \
-    get_proj_norms, get_tau,  get_sigmas, save_callback
+    get_proj_norms, get_tau,  get_sigmas, save_callback, save_dicom
 from Regularisers.TotalVariation import TotalVariation
 
 #############################################################################
@@ -116,6 +116,8 @@ class Reconstruct(object):
         parser.add_argument("--nobj", help="Frequency to which compute objective", 
                             default=50, type=int)
         parser.add_argument("--nifti", action='store_true', help="Save final reconstruction in nifti format")
+        parser.add_argument("--dicom", action='store_true', help="Save final reconstruction in DICOM format")
+
         self.args = parser.parse_args()
 
     def create_output_folders(self):
@@ -346,13 +348,15 @@ class Reconstruct(object):
         np.save('{}/{}_metadata'.format(self.args.folder_output, self.output_name), metadata_dict)
         np.save('{}/{}_objective'.format(self.args.folder_output, self.output_name), self.spdhg.objective)
         if self.args.nifti:
-            reg.NiftiImageData(self.spdhg.solution).write(
-                "{}/{}_iters_{}".format(self.args.folder_output,self.output_name, self.spdhg.iteration))
+            output_name = "{}/{}_iters_{}".format(self.args.folder_output,self.output_name, self.spdhg.iteration)
+            reg.NiftiImageData(self.spdhg.solution).write(output_name)
+            if self.args.dicom:
+                save_dicom(output_name)
+        if self.args.dicom and not self.args.nifti:
+            raise ValueError("Need nifti option to have dicom option in current implenentation")
  
 
-
-
-    
+ 
         
 if __name__ == "__main__":
 

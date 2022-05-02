@@ -10,6 +10,7 @@ import scipy.io
 from functools import partial
 from numbers import Number
 import warnings
+import skrt
 
 import sirf.STIR as pet
 pet.set_verbosity(1)
@@ -248,3 +249,9 @@ def CIL_TV_proximal(self, x, tau, out = None):
         out*=self.regularisation_parameter
         x.subtract(out, out=out)
         self.projection_C(out, out=out)
+
+def save_dicom(name):
+    "Take path to a nifti file as input, creates folder with DICOM as output"
+    im = skrt.Image(name + '.nii')
+    root_uid = "1.2.826.0.1.3680043.10.937."
+    im.write(name, root_uid=root_uid, modality='PT', standardise=True, header_extras={'RescaleSlope': 0.0001})
