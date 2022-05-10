@@ -99,6 +99,8 @@ class Reconstruct(object):
                             help = "Rebin all sinograms, with a given number of view to combine. Decreases computational time.",
                             type=int, default = 1)
         parser.add_argument('--fast', action='store_true',
+                            help="Decreases computational time by rebinning data")
+        parser.add_argument('--faast', action='store_true',
                             help="Decreases computational time by rebinning data and halving reconstructed image dimensons")
 
         # reconstruction parameters
@@ -162,10 +164,16 @@ class Reconstruct(object):
         pet.AcquisitionData.set_storage_scheme('memory')
         self.raw_acq_data_template = pet.AcquisitionData(self.scanner_name,span=self.span)
         
-        if self.args.fast:
-            print("The '--fast' option is on, supercedes '--lor', '--nxny', '--numSegsToCombine' and '--numViewsToCombine' ")
+        if self.args.faast:
+            print("The '--faast' option is on, supercedes '--lor', '--nxny', '--numSegsToCombine' and '--numViewsToCombine' ")
             self.lor = 2
             self.nxny = int(np.ceil(self.raw_acq_data_template.create_uniform_image(0.0).shape[1]/2))
+            self.num_segs_to_combine = 5
+            self.num_views_to_combine = 4
+        elif self.args.fast:
+            print("The '--fast' option is on, supercedes '--lor', '--nxny', '--numSegsToCombine' and '--numViewsToCombine' ")
+            self.lor = 2
+            self.nxny = self.args.nxny
             self.num_segs_to_combine = 5
             self.num_views_to_combine = 4
         else:
