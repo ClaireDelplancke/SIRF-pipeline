@@ -51,7 +51,8 @@ class Reconstruct(object):
         
         # input / output
         parser.add_argument("--scanner", type=str, 
-                            default='GE Discovery 690')
+                            default='GE Discovery 690', 
+                            choices=['GE Signa PET/MR', 'Discovery MI4', 'GE Discovery 690'])
         parser.add_argument("--span", type=int, 
                             default=2, help='GE scanners need 2')
         parser.add_argument("--folder_input", type=str)
