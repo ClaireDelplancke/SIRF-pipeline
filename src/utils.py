@@ -250,8 +250,54 @@ def CIL_TV_proximal(self, x, tau, out = None):
         x.subtract(out, out=out)
         self.projection_C(out, out=out)
 
-def save_dicom(name):
+def save_dicom(name, series_description='PET++ IR', ref_dicom=None, description=None):
     "Take path to a nifti file as input, creates folder with DICOM as output"
-    im = skrt.Image(name + '.nii')
+    nii1 = skrt.Image(name + '.nii')
+    # Flip axis
+    nii2_data = nii1.get_data().transpose(1, 0, 2)[::-1, ::-1, :]
+    nii2_affine = nii1.get_affine(standardise=True)
+    nii2 = skrt.Image(path=nii2_data, affine=nii2_affine)
+    # Manually center z-axis
+    z0 = -198.25
+    nii2_affine[2][3] = z0
     root_uid = "1.2.826.0.1.3680043.10.937."
-    im.write(name, root_uid=root_uid, modality='PT', standardise=True, header_extras={'RescaleSlope': 0.0001})
+    # Fill additional info
+    if description is not None:
+        series_description += ', ' + description
+    if ref_dicom is None:
+        patient_name = 'unknown'
+        patient_id = 'unknown'
+        study_date = 'unknown'
+        study_id = 'unknwon'
+        study_description = 'unknown'
+        study_instance_uid = 'unknown'
+    else:
+        # load ref dicom
+        dicom_data = skrt.Image(ref_dicom).get_dicom_dataset()
+        patient_name = str(dicom_data.PatientName)
+        if patient_name.startswith('ANON'):
+            patient_name = patient_name.strip('ANON')
+        patient_id = dicom_data.PatientID
+        study_date = dicom_data.StudyDate
+        study_id = dicom_data.StudyID
+        study_description = dicom_data.StudyDescription
+        study_instance_uid = dicom_data.StudyInstanceUID
+
+    header_extras = {
+        'PatientName': patient_name,
+        'PatientID': patient_id,
+        'StudyDate' : study_date,
+        'StudyID' : study_id,
+        'StudyDescription' : study_description,
+        'StudyInstanceUID' : study_instance_uid,
+        'Series Description' : series_description,
+        'RescaleSlope': 0.0001,
+        }
+
+    nii2.write( 
+        outname=name, 
+        root_uid=root_uid, 
+        modality='PT', 
+        standardise=True, 
+        patient_id=patient_id,
+        header_extras=header_extras)
