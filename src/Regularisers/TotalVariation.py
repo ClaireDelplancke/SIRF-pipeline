@@ -15,6 +15,7 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
+import cil
 from cil.optimisation.functions import Function, IndicatorBox
 from cil.optimisation.operators import GradientOperator
 import numpy as np
@@ -314,3 +315,123 @@ class TotalVariation(Function):
             raise TypeError("scalar: Expectec a number, got {}".format(type(scalar)))
         self.regularisation_parameter = scalar
         return self
+
+class AnisotropicGradientOperator(GradientOperator):
+    '''
+    Computes anisotropic gradient operator
+    param ksi: anistropy field, must be a BlockDataContainer object
+    .. math::
+        \nabla : X -> Y \\
+        u\in X, D \nabla(u) = \sum_{i=1}^n D_i \nabla_i(u)\\
+            = \sum_{i=1}^n  \nabla_i(u) - <ksi_i, \nabla_i(u)> ksi_i
+    where :math: `n` is the number of dimensions of the image.
+
+    Reference:
+    Multicontrast MRI Reconstruction with Structure-Guided Total Variation, 
+    Matthias J. Ehrhardt and Marta M. Betcke, SIAM Imaging Sciences 2016
+    '''
+
+    def __init__(self, domain_geometry, method='forward', bnd_cond='Neumann', backend=None, correlation=None, ksi=None):
+
+        if not isinstance(ksi, cil.framework.BlockDataContainer):
+            raise ValueError('Anisotropy field ksi should be a BlockDataContainer')
+            
+        self.ksi = ksi
+        self.ndim = self.ksi.shape[0]
+        super(AnisotropicGradientOperator, self).__init__(
+                                        domain_geometry=domain_geometry, 
+                                        method=method,
+                                        bnd_cond=bnd_cond,
+                                        backend=backend,
+                                        correlation=correlation) 
+
+    def direct(self, x, out=None):
+        if out is None:
+            # compute gradient
+            out = super().direct(x)
+            # compute anisotropic gradient
+            for i in range(self.ndim):
+                out[i].sapyb(1, self.ksi[i], - (self.ksi[i] * out[i]).sum(), out=out[i])
+            return out
+        else:
+            # compute gradient
+            super().direct(x, out=out)
+            # compute anisotropic gradient
+            for i in range(self.ndim):
+                out[i].sapyb(1, self.ksi[i], - (self.ksi[i] * out[i]).sum(), out=out[i])
+    
+    def adjoint(self, x, out=None):
+        # compute anisotropy
+        tmp_x = x.clone()
+        for i in range(self.ndim):
+            x[i].sapyb(1, self.ksi[i], - (self.ksi[i] * x[i]).sum(), out=tmp_x[i])
+        # compute divergence
+        if out is None:
+            return super().adjoint(tmp_x)
+        else:
+            super().adjoint(tmp_x, out=out) 
+
+
+
+class DirectionalTotalVariation(TotalVariation):
+    
+    r'''
+    Reference:
+      
+    Multicontrast MRI Reconstruction with Structure-Guided Total Variation, 
+    Matthias J. Ehrhardt and Marta M. Betcke, SIAM Imaging Sciences 2016
+        
+    '''    
+    
+    
+    def __init__(self,
+                 max_iteration=100, 
+                 tolerance = None, 
+                 correlation = "Space",
+                 backend = "c",
+                 lower = -np.inf, 
+                 upper = np.inf,
+                 isotropic = True,
+                 split = False,
+                 info = False,
+                 warmstart = False,
+                 reference_image = None,
+                 eta=1e-2):
+
+        self.reference_image = reference_image
+        self.eta = eta
+        # compute anisotropy field from reference image
+        try:
+            geom = self.reference_image.geometry
+        except:
+            geom = self.reference_image
+
+        regular_gradient = GradientOperator(geom, correlation=correlation, backend=backend)
+        self.anisotropy_field = regular_gradient.direct(self.reference_image)
+        self.ndim = self.anisotropy_field.shape[0]
+        for i in range(self.ndim):
+            self.anisotropy_field[i].divide(np.sqrt(self.anisotropy_field[i].norm()**2 + self.eta**2),
+                                            out=self.anisotropy_field[i])
+
+        super(DirectionalTotalVariation, self).__init__(
+                max_iteration=max_iteration, 
+                 tolerance=tolerance,
+                 correlation=correlation,
+                 backend=backend,
+                 lower=lower,
+                 upper=upper,
+                 isotropic=isotropic,
+                 split=split,
+                 info=info,
+                 warmstart=warmstart)
+    @property
+    def gradient(self):
+        '''creates a gradient operator if not instantiated yet
+        There is no check that the variable _domain is changed after instantiation (should not be the case)'''
+        if self._gradient is None:
+            if self._domain is not None:
+                self._gradient = AnisotropicGradientOperator(self._domain, correlation = self.correlation, backend = self.backend, ksi = self.anisotropy_field)
+        return self._gradient
+
+
+ 

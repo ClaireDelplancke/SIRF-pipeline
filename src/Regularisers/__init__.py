@@ -1,1 +1,1 @@
-from .TotalVariation import TotalVariation
+from .TotalVariation import TotalVariation, AnisotropicGradientOperator, DirectionalTotalVariation

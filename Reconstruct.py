@@ -37,7 +37,7 @@ src_path = '{}/src'.format(os.getcwd())
 sys.path.append(src_path)
 from utils import load_data, augment_dim, pre_process_sinogram, FGP_TV_check_input, \
     get_proj_norms, get_tau,  get_sigmas, save_callback, save_dicom
-from Regularisers.TotalVariation import TotalVariation
+from Regularisers.TotalVariation import TotalVariation, DirectionalTotalVariation
 
 #############################################################################
 #               Reconstruction class                                        #
@@ -84,7 +84,8 @@ class Reconstruct(object):
         # model parameters
         parser.add_argument("--reg", help="Regularisation", 
                             default='FGP-TV',  type=str, 
-                            choices = ['FGP-TV' ,'FGP_TV' ,'None', 'Explicit-TV', 'CIL-TV'])
+                            choices = ['FGP-TV' ,'FGP_TV' ,'None', 'Explicit-TV', 'CIL-TV', 'DTV'])
+        parser.add_argument("--anatomical_image", help="path to the reference image for directional TV")
         parser.add_argument("--no_warm_start", action='store_true', 
                             help="disables warm-start in CIL-TV")
         parser.add_argument("--reg_strength", help="Parameter of regularisation", 
@@ -256,7 +257,14 @@ class Reconstruct(object):
             else:
                 r_iters = 5
                 self.G = r_alpha * TotalVariation(r_iters, r_tolerance, lower=0, warmstart=True)
-
+        elif self.args.reg == "DTV":
+            reference_image = pet.ImageData(self.args.anatomical_image)
+            if self.args.no_warm_start:
+                r_iters = 100
+                self.G = r_alpha * DirectionalTotalVariation(r_iters, r_tolerance, lower=0, reference_image=reference_image)
+            else:
+                r_iters = 5
+                self.G = r_alpha * DirectionalTotalVariation(r_iters, r_tolerance, lower=0, warmstart=True, reference_image=reference_image)
         elif self.args.reg == "None":
             self.G = IndicatorBox(lower=0)
         elif self.args.reg == "Explicit-TV":
