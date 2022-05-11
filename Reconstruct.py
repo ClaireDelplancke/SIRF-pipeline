@@ -246,6 +246,7 @@ class Reconstruct(object):
         r_alpha = self.args.reg_strength
         r_tolerance = 1e-7
         if self.args.reg == "FGP_TV" or self.args.reg == "FGP-TV":
+            self.description = 'FGP-TV reg {}'.format(r_alpha)
             print("With the FGP_TV option, the gradient is defined as the finite difference operator (voxel-size not taken into account)")
             r_iters = 100
             r_iso = 1
@@ -260,6 +261,7 @@ class Reconstruct(object):
             # XXX change when issue solved
             FGP_TV.check_input = FGP_TV_check_input
         elif self.args.reg == "CIL-TV":
+            self.description = 'TV reg {}'.format(r_alpha)
             print("With the CIL-TV option, the gradient is defined as the finite difference operator divided by the voxel-size in each direction")
             if self.args.no_warm_start:
                 r_iters = 100
@@ -268,6 +270,7 @@ class Reconstruct(object):
                 r_iters = 5
                 self.G = r_alpha * TotalVariation(r_iters, r_tolerance, lower=0, warmstart=True)
         elif self.args.reg == "DTV":
+            self.description = 'Directional TV reg {}'.format(r_alpha)
             reference_image = pet.ImageData(self.args.anatomical_image)
             if self.args.no_warm_start:
                 r_iters = 100
@@ -276,8 +279,10 @@ class Reconstruct(object):
                 r_iters = 5
                 self.G = r_alpha * DirectionalTotalVariation(r_iters, r_tolerance, lower=0, warmstart=True, reference_image=reference_image)
         elif self.args.reg == "None":
+            self.description = 'No reg'
             self.G = IndicatorBox(lower=0)
         elif self.args.reg == "Explicit-TV":
+            self.description = 'Explicit TV reg {}'.format(r_alpha)
             raise ValueError("Not implemented at the moment")
         else:
             raise ValueError("Unknown regularisation")
@@ -378,7 +383,9 @@ class Reconstruct(object):
             output_name = "{}/{}_iters_{}".format(self.args.folder_output,self.output_name, self.spdhg.iteration)
             reg.NiftiImageData(self.spdhg.solution).write(output_name)
             if self.args.dicom:
-                save_dicom(output_name)
+                save_dicom(output_name,
+                        ref_dicom='{}/Duetto_OSEM'.format(self.args.folder_input),
+                        description=self.description)
         if self.args.dicom and not self.args.nifti:
             raise ValueError("Need nifti option to have dicom option in current implenentation")
  

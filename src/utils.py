@@ -257,9 +257,7 @@ def save_dicom(name, series_description='PET++ IR', ref_dicom=None, description=
     nii2_data = nii1.get_data().transpose(1, 0, 2)[::-1, ::-1, :]
     nii2_affine = nii1.get_affine(standardise=True)
     nii2 = skrt.Image(path=nii2_data, affine=nii2_affine)
-    # Manually center z-axis
-    z0 = -198.25
-    nii2_affine[2][3] = z0
+
     root_uid = "1.2.826.0.1.3680043.10.937."
     # Fill additional info
     if description is not None:
@@ -271,9 +269,11 @@ def save_dicom(name, series_description='PET++ IR', ref_dicom=None, description=
         study_id = 'unknwon'
         study_description = 'unknown'
         study_instance_uid = 'unknown'
+        z0 = 0.0
     else:
         # load ref dicom
-        dicom_data = skrt.Image(ref_dicom).get_dicom_dataset()
+        skrt_im = skrt.Image(ref_dicom)
+        dicom_data = skrt_im.get_dicom_dataset()
         patient_name = str(dicom_data.PatientName)
         if patient_name.startswith('ANON'):
             patient_name = patient_name.strip('ANON')
@@ -282,6 +282,7 @@ def save_dicom(name, series_description='PET++ IR', ref_dicom=None, description=
         study_id = dicom_data.StudyID
         study_description = dicom_data.StudyDescription
         study_instance_uid = dicom_data.StudyInstanceUID
+        z0 = skrt_im.get_dicom_dataset(sl=dicom_data.NumberOfSlices).SliceLocation
 
     header_extras = {
         'PatientName': patient_name,
@@ -293,6 +294,9 @@ def save_dicom(name, series_description='PET++ IR', ref_dicom=None, description=
         'Series Description' : series_description,
         'RescaleSlope': 0.0001,
         }
+
+    # Center z-axis
+    nii2_affine[2][3] = z0
 
     nii2.write( 
         outname=name, 
