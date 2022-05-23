@@ -96,6 +96,7 @@ class Reconstruct(object):
                             default='FGP-TV',  type=str, 
                             choices = ['FGP-TV' ,'FGP_TV' ,'None', 'Explicit-TV', 'CIL-TV', 'DTV'])
         parser.add_argument("--anatomical_image", help="path to the reference image for directional TV")
+        parser.add_argument("--edge_parameter", help="edge parameter for directional TV", default=0.01, type=float)
         parser.add_argument("--no_warm_start", action='store_true', 
                             help="disables warm-start in CIL-TV")
         parser.add_argument("--reg_strength", help="Parameter of regularisation", 
@@ -113,6 +114,8 @@ class Reconstruct(object):
                             help="Decreases computational time by rebinning data")
         parser.add_argument('--faast', action='store_true',
                             help="Decreases computational time by rebinning data and halving reconstructed image dimensons")
+        parser.add_argument('--psf', action='store_true',
+                            help="Use PSF modelling")
 
         # reconstruction parameters
         parser.add_argument("--nepoch", help="Number of epochs", 
@@ -132,7 +135,11 @@ class Reconstruct(object):
         parser.add_argument("--nifti", action='store_true', help="Save final reconstruction in nifti format")
         parser.add_argument("--dicom", action='store_true', help="Save final reconstruction in DICOM format")
 
-        self.args = parser.parse_args()
+        self.args = parser.parse_args(raw_args)
+        print(self.args)
+
+        # put here everything wanted in the DICOM study description
+        self.description = ''
 
     def create_output_folders(self):
         """Create output folders"""
@@ -220,6 +227,9 @@ class Reconstruct(object):
         self.num_subsets = self.args.nsubsets 
         # set-up acquisition model
         self.acq_models = [pet.AcquisitionModelUsingRayTracingMatrix() for k in range(self.num_subsets)]
+        if  self.args.psf:
+            self.smoothers = [pet.SeparableGaussianImageFilter() for k in range(self.num_subsets)]
+            self.description += ' PSF '
         # create masks
         im_one = self.image_template.clone()
         im_one.fill(1.)
@@ -231,6 +241,9 @@ class Reconstruct(object):
             # Set up
             self.acq_models[k].set_num_tangential_LORs(self.lor)
             self.acq_models[k].set_acquisition_sensitivity(asm)
+            if self.args.psf:
+                self.smoothers[k].set_fwhms((5,5,5))
+                self.acq_models[k].set_image_data_processor(self.smoothers[k])
             self.acq_models[k].set_up(self.sinogram, self.image_template)    
             self.acq_models[k].num_subsets = self.num_subsets
             self.acq_models[k].subset_num = k 
@@ -246,7 +259,7 @@ class Reconstruct(object):
         r_alpha = self.args.reg_strength
         r_tolerance = 1e-7
         if self.args.reg == "FGP_TV" or self.args.reg == "FGP-TV":
-            self.description = 'FGP-TV reg {}'.format(r_alpha)
+            self.description += 'FGP-TV reg {}'.format(r_alpha)
             print("With the FGP_TV option, the gradient is defined as the finite difference operator (voxel-size not taken into account)")
             r_iters = 100
             r_iso = 1
@@ -261,7 +274,7 @@ class Reconstruct(object):
             # XXX change when issue solved
             FGP_TV.check_input = FGP_TV_check_input
         elif self.args.reg == "CIL-TV":
-            self.description = 'TV reg {}'.format(r_alpha)
+            self.description += ' TV reg {}'.format(r_alpha)
             print("With the CIL-TV option, the gradient is defined as the finite difference operator divided by the voxel-size in each direction")
             if self.args.no_warm_start:
                 r_iters = 100
@@ -270,19 +283,27 @@ class Reconstruct(object):
                 r_iters = 5
                 self.G = r_alpha * TotalVariation(r_iters, r_tolerance, lower=0, warmstart=True)
         elif self.args.reg == "DTV":
-            self.description = 'Directional TV reg {}'.format(r_alpha)
+            self.description += ' Directional TV reg {}'.format(r_alpha)
             reference_image = pet.ImageData(self.args.anatomical_image)
+            edge_parameter = self.args.edge_parameter
             if self.args.no_warm_start:
                 r_iters = 100
-                self.G = r_alpha * DirectionalTotalVariation(r_iters, r_tolerance, lower=0, reference_image=reference_image)
+                self.G = r_alpha * DirectionalTotalVariation(
+                                                            r_iters, r_tolerance, lower=0, 
+                                                            reference_image=reference_image,
+                                                            edge_parameter=edge_parameter)
             else:
                 r_iters = 5
-                self.G = r_alpha * DirectionalTotalVariation(r_iters, r_tolerance, lower=0, warmstart=True, reference_image=reference_image)
+                self.G = r_alpha * DirectionalTotalVariation(
+                                                            r_iters, r_tolerance, lower=0, 
+                                                            warmstart=True, 
+                                                            reference_image=reference_image,
+                                                            edge_parameter=edge_parameter)
         elif self.args.reg == "None":
-            self.description = 'No reg'
+            self.description += ' No reg'
             self.G = IndicatorBox(lower=0)
         elif self.args.reg == "Explicit-TV":
-            self.description = 'Explicit TV reg {}'.format(r_alpha)
+            self.description += ' Explicit TV reg {}'.format(r_alpha)
             raise ValueError("Not implemented at the moment")
         else:
             raise ValueError("Unknown regularisation")
@@ -352,6 +373,8 @@ class Reconstruct(object):
                 self.num_subsets, int(self.args.precond), int(self.args.acf), 
                 int(self.args.normf), int(self.args.dtpucf), int(self.args.randoms), int(self.args.scatter)
                 )
+        if self.args.psf:
+            self.output_name += '_PSF'
 
         self.psave_callback = partial(
             save_callback, num_save, 0, self.args.folder_output, self.output_name, self.num_iter)
