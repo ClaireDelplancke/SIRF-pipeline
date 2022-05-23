@@ -346,25 +346,30 @@ class AnisotropicGradientOperator(GradientOperator):
                                         correlation=correlation) 
 
     def direct(self, x, out=None):
+        grad_x = super().direct(x)
+        # compute local field
+        scalar_field_np = sum([self.ksi[i].as_array()*grad_x[i].as_array() for i in range(self.ndim)])
+        scalar_field = x.clone()
+        scalar_field.fill(scalar_field_np)
+        # compute anisotropic gradient
         if out is None:
-            # compute gradient
-            out = super().direct(x)
-            # compute anisotropic gradient
+            out = grad_x.clone()
             for i in range(self.ndim):
-                out[i].sapyb(1, self.ksi[i], - (self.ksi[i] * out[i]).sum(), out=out[i])
+                grad_x[i].sapyb(1, self.ksi[i], - scalar_field, out=out[i])
             return out
         else:
-            # compute gradient
-            super().direct(x, out=out)
-            # compute anisotropic gradient
             for i in range(self.ndim):
-                out[i].sapyb(1, self.ksi[i], - (self.ksi[i] * out[i]).sum(), out=out[i])
+                grad_x[i].sapyb(1, self.ksi[i], - scalar_field, out=out[i])
     
     def adjoint(self, x, out=None):
+        # compute local field
+        scalar_field_np = sum([self.ksi[i].as_array()*x[i].as_array() for i in range(self.ndim)])
+        scalar_field = x[0].clone()
+        scalar_field.fill(scalar_field_np)
         # compute anisotropy
         tmp_x = x.clone()
         for i in range(self.ndim):
-            x[i].sapyb(1, self.ksi[i], - (self.ksi[i] * x[i]).sum(), out=tmp_x[i])
+            x[i].sapyb(1, self.ksi[i], - scalar_field, out=tmp_x[i])
         # compute divergence
         if out is None:
             return super().adjoint(tmp_x)
@@ -396,23 +401,11 @@ class DirectionalTotalVariation(TotalVariation):
                  info = False,
                  warmstart = False,
                  reference_image = None,
-                 eta=1e-2):
+                 edge_parameter=1e-2):
 
         self.reference_image = reference_image
-        self.eta = eta
-        # compute anisotropy field from reference image
-        try:
-            geom = self.reference_image.geometry
-        except:
-            geom = self.reference_image
-
-        regular_gradient = GradientOperator(geom, correlation=correlation, backend=backend)
-        self.anisotropy_field = regular_gradient.direct(self.reference_image)
-        self.ndim = self.anisotropy_field.shape[0]
-        for i in range(self.ndim):
-            self.anisotropy_field[i].divide(np.sqrt(self.anisotropy_field[i].norm()**2 + self.eta**2),
-                                            out=self.anisotropy_field[i])
-
+        self.eta = edge_parameter
+        
         super(DirectionalTotalVariation, self).__init__(
                 max_iteration=max_iteration, 
                  tolerance=tolerance,
@@ -424,6 +417,8 @@ class DirectionalTotalVariation(TotalVariation):
                  split=split,
                  info=info,
                  warmstart=warmstart)
+        self.set_up_anisotropy_field()
+
     @property
     def gradient(self):
         '''creates a gradient operator if not instantiated yet
@@ -433,5 +428,21 @@ class DirectionalTotalVariation(TotalVariation):
                 self._gradient = AnisotropicGradientOperator(self._domain, correlation = self.correlation, backend = self.backend, ksi = self.anisotropy_field)
         return self._gradient
 
+    def set_up_anisotropy_field(self):
+        ''' creates anisotropy field from reference image and edge parameter'''
+        # compute gradient of reference image
+        try:
+            geom = self.reference_image.geometry
+        except:
+            geom = self.reference_image
+        regular_gradient = GradientOperator(geom, correlation=self.correlation, backend=self.backend)
+        reference_image_gradient = regular_gradient.direct(self.reference_image)
+        self.ndim = reference_image_gradient.shape[0]
+        # compute scalar field of 1/(\|reference_image_gradient\|^2+ eta^2)**(1/2) (Numpy format)
+        np_scalar_field = 1/np.sqrt(sum([reference_image_gradient[i].as_array()**2 for i in range(self.ndim)]) + self.eta**2 )
+        scalar_field = self.reference_image.clone()
+        scalar_field.fill(np_scalar_field)
+        # compute anisotropy field
+        self.anisotropy_field = scalar_field * reference_image_gradient
 
- 
+
