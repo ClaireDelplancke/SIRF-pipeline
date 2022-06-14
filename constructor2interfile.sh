@@ -1,0 +1,1 @@
+python constructor2interfile.py --folder_input /home/cd902/GeorgNEMA1e9_counts/duetto_claire --folder_output /home/cd902/GeorgNEMA1e9_counts/interfile --scanner 'Discovery MI4'
